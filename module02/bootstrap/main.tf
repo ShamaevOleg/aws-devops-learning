@@ -1,6 +1,6 @@
 # main.tf
 resource "aws_s3_bucket" "tfstate" {
-  bucket = "oleg-tfstate-initial"  # имя должно быть уникально глобально
+  bucket = "oleg-tfstate-initial" # имя должно быть уникально глобально
 }
 
 resource "aws_s3_bucket_versioning" "tfstate" {
