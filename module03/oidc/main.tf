@@ -31,7 +31,7 @@ data "aws_iam_policy_document" "github_policy_document_plan" {
 
 data "aws_iam_policy_document" "tfstate_access" {
   statement {
-    actions   = ["s3:GetObject", "s3:PutObject"]
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
     resources = ["arn:aws:s3:::oleg-tfstate-initial/*"] # объекты внутри бакета
   }
   statement {
