@@ -33,8 +33,7 @@ jobs:
       - name: Terraform plan
         working-directory: module03/infra
         run: |
-          terraform plan -no-color >> $GITHUB_OUTPUT
-        id: tf_plan
+          terraform plan -no-color
 
 permissions:
   id-token: write  # РАЗРЕШАЕТ запросить OIDC-токен у GitHub

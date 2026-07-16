@@ -29,6 +29,23 @@ data "aws_iam_policy_document" "github_policy_document_plan" {
   }
 }
 
+data "aws_iam_policy_document" "tfstate_access" {
+  statement {
+    actions   = ["s3:GetObject", "s3:PutObject"]
+    resources = ["arn:aws:s3:::oleg-tfstate-initial/*"] # объекты внутри бакета
+  }
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = ["arn:aws:s3:::oleg-tfstate-initial"] # сам бакет
+  }
+}
+
+resource "aws_iam_role_policy" "tfstate" {
+  name   = "tfstate-access"
+  role   = aws_iam_role.github_iam_role_readonly.id
+  policy = data.aws_iam_policy_document.tfstate_access.json
+}
+
 resource "aws_iam_role_policy_attachment" "readonly" {
   role       = aws_iam_role.github_iam_role_readonly.name
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
