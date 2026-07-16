@@ -1,0 +1,42 @@
+name: Terraform plan workflow
+
+on:
+  pull_request:
+    types:
+      - opened
+
+jobs:
+  terraform_plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: "eu-west-2"
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Terraform fmt
+        working-directory: ../../module03/infra
+        run: |
+          terraform fmt -check
+      - name: Terraform init
+        working-directory: ../../module03/infra
+        run: |
+          terraform init
+      - name: Terraform validate
+        working-directory: ../../module03/infra
+        run: |
+          terraform validate
+      - name: Terraform plan
+        working-directory: ../../module03/infra
+        run: |
+          terraform plan -no-color >> $GITHUB_OUTPUT
+        id: tf_plan
+
+permissions:
+  id-token: write  # РАЗРЕШАЕТ запросить OIDC-токен у GitHub
+  contents: read  # прочитать код репозитория
+  pull-requests: write  # чтобы постить план в комментарий к PR
