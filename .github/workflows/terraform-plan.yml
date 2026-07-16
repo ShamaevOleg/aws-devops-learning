@@ -2,7 +2,8 @@ name: Terraform plan workflow
 
 on:
   pull_request:
-    types: [opened, edited]
+    types:
+      - opened
 
 jobs:
   terraform_plan:
