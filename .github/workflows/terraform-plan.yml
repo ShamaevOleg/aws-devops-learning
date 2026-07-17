@@ -34,22 +34,16 @@ jobs:
         id: plan
         working-directory: module03/infra
         run: |
-          echo "stdout<<EOF" >> $GITHUB_OUTPUT
-          terraform plan -no-color >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          terraform plan -no-color
       - name: Comment plan on PR
         uses: actions/github-script@v7
         with:
           script: |
-            const output = `#### Terraform Plan
-            \`\`\`
-            ${{ steps.plan.outputs.stdout }}
-            \`\`\``;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: output
+              body: ${{ steps.plan.outputs.stdout }}
             });
 
 permissions:
