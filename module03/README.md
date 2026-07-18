@@ -63,3 +63,37 @@ cover this.
 
 **Fix:** A dedicated policy granting `s3:GetObject`, `s3:PutObject` and
 `s3:DeleteObject` on the state objects, plus `s3:ListBucket` on the bucket itself.
+
+### 2. A stuck state lock after a failed run
+
+**Symptom:** `Error acquiring the state lock ... StatusCode: 412,
+PreconditionFailed`, referencing a lock ID created by an earlier run.
+
+**Cause:** The previous run acquired the lock but could not release it, because
+the role was missing `s3:DeleteObject`. The lock object stayed in the bucket.
+On the next run Terraform tried to create the lock with a conditional
+`PutObject` (write only if the object does not exist), and the precondition
+failed because the stale lock was still there.
+
+**Fix:** Added `s3:DeleteObject` to the state policy and cleared the stale lock
+with `terraform force-unlock <lock-id>`.
+
+**Takeaway:** An insufficient permission did not just fail one run — it left the
+state locked and blocked every subsequent run. Pipeline permissions are worth
+verifying up front rather than discovering them one error at a time.
+
+### 3. The plan appeared twice in the PR comment
+
+**Symptom:** The comment contained the plan output twice, along with internal
+markers such as `stdout<<ghadelimiter_...`, `stderr<<...` and `exitcode<<...`.
+
+**Cause:** `hashicorp/setup-terraform` enables a wrapper around the Terraform
+binary by default (`terraform_wrapper: true`). The wrapper already captures
+`stdout`, `stderr` and the exit code and exposes them as step outputs. The
+workflow was also capturing the output manually with a heredoc redirect into
+`$GITHUB_OUTPUT`, so the plan was collected twice.
+
+**Fix:** Removed the manual redirect and relied on the wrapper's own
+`steps.<id>.outputs.stdout`. The alternative would have been to disable the
+wrapper with `terraform_wrapper: false` and keep the manual capture — either
+approach works, but not both at once.
