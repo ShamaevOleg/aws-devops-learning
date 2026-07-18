@@ -1,0 +1,43 @@
+name: Terraform apply workflow
+
+permissions:
+  id-token: write  # РАЗРЕШАЕТ запросить OIDC-токен у GitHub
+  contents: read  # прочитать код репозитория
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: terraform_apply
+  cancel-in-progress: false
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: module03/infra
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: "eu-west-2"
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Terraform fmt
+        run: |
+          terraform fmt -check
+      - name: Terraform init
+        run: |
+          terraform init
+      - name: Terraform validate
+        run: |
+          terraform validate
+      - name: Terraform apply
+        run: |
+          terraform apply -auto-approve

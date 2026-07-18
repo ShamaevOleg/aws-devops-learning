@@ -1,3 +1,10 @@
+locals {
+  roles = {
+    readonly = { sub = "repo:ShamaevOleg/aws-devops-learning:*", test = "StringLike" }
+    apply    = { sub = "repo:ShamaevOleg/aws-devops-learning:environment:production", test = "StringEquals" }
+  }
+}
+
 resource "aws_iam_openid_connect_provider" "github_provider" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
@@ -5,10 +12,16 @@ resource "aws_iam_openid_connect_provider" "github_provider" {
 
 resource "aws_iam_role" "github_iam_role_readonly" {
   name               = "github-iam-role-readonly"
-  assume_role_policy = data.aws_iam_policy_document.github_policy_document_plan.json
+  assume_role_policy = data.aws_iam_policy_document.trust["apply"].json
 }
 
-data "aws_iam_policy_document" "github_policy_document_plan" {
+resource "aws_iam_role" "github_iam_role_apply" {
+  name               = "github-iam-role-apply"
+  assume_role_policy = data.aws_iam_policy_document.trust["readonly"].json
+}
+
+data "aws_iam_policy_document" "trust" {
+  for_each = local.roles
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
@@ -22,9 +35,9 @@ data "aws_iam_policy_document" "github_policy_document_plan" {
     }
 
     condition {
-      test     = "StringLike"
+      test     = each.value.test
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:ShamaevOleg/aws-devops-learning:*"]
+      values   = [each.value.sub]
     }
   }
 }
@@ -40,13 +53,28 @@ data "aws_iam_policy_document" "tfstate_access" {
   }
 }
 
-resource "aws_iam_role_policy" "tfstate" {
-  name   = "tfstate-access"
-  role   = aws_iam_role.github_iam_role_readonly.id
-  policy = data.aws_iam_policy_document.tfstate_access.json
+resource "aws_iam_policy" "tfstate" {
+  name        = "tfstate-access"
+  description = "Read/write access to Terraform state in S3"
+  policy      = data.aws_iam_policy_document.tfstate_access.json
 }
 
 resource "aws_iam_role_policy_attachment" "readonly" {
   role       = aws_iam_role.github_iam_role_readonly.name
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "vpcFullAccess" {
+  role       = aws_iam_role.github_iam_role_apply.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonVPCFullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "tfstate_readonly" {
+  role       = aws_iam_role.github_iam_role_readonly.name
+  policy_arn = aws_iam_policy.tfstate.arn
+}
+
+resource "aws_iam_role_policy_attachment" "tfstate_apply" {
+  role       = aws_iam_role.github_iam_role_apply.name
+  policy_arn = aws_iam_policy.tfstate.arn
 }
