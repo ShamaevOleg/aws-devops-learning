@@ -16,6 +16,7 @@ concurrency:
 jobs:
   terraform-apply:
     runs-on: ubuntu-latest
+    environment: production
     defaults:
       run:
         working-directory: module03/infra
@@ -25,7 +26,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_APPLY }}
           aws-region: "eu-west-2"
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
