@@ -1,5 +1,10 @@
 name: Terraform plan workflow
 
+permissions:
+  id-token: write  # РАЗРЕШАЕТ запросить OIDC-токен у GitHub
+  contents: read  # прочитать код репозитория
+  pull-requests: write  # чтобы постить план в комментарий к PR
+
 on:
   pull_request:
 
@@ -48,8 +53,3 @@ jobs:
               repo: context.repo.repo,
               body: output
             });
-
-permissions:
-  id-token: write  # РАЗРЕШАЕТ запросить OIDC-токен у GitHub
-  contents: read  # прочитать код репозитория
-  pull-requests: write  # чтобы постить план в комментарий к PR
