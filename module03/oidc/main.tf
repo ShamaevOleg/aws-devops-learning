@@ -12,12 +12,12 @@ resource "aws_iam_openid_connect_provider" "github_provider" {
 
 resource "aws_iam_role" "github_iam_role_readonly" {
   name               = "github-iam-role-readonly"
-  assume_role_policy = data.aws_iam_policy_document.trust["apply"].json
+  assume_role_policy = data.aws_iam_policy_document.trust["readonly"].json
 }
 
 resource "aws_iam_role" "github_iam_role_apply" {
   name               = "github-iam-role-apply"
-  assume_role_policy = data.aws_iam_policy_document.trust["readonly"].json
+  assume_role_policy = data.aws_iam_policy_document.trust["apply"].json
 }
 
 data "aws_iam_policy_document" "trust" {
