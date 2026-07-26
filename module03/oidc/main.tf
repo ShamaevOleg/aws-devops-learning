@@ -2,6 +2,7 @@ locals {
   roles = {
     readonly = { sub = "repo:ShamaevOleg/aws-devops-learning:*", test = "StringLike" }
     apply    = { sub = "repo:ShamaevOleg/aws-devops-learning:environment:production", test = "StringEquals" }
+    push = { sub = "repo:ShamaevOleg/aws-devops-learning:ref:refs/heads/main", test = "StringEquals" }
   }
 }
 
@@ -22,6 +23,12 @@ resource "aws_iam_role" "github_iam_role_apply" {
   name               = "github-iam-role-apply"
   assume_role_policy = data.aws_iam_policy_document.trust["apply"].json
 }
+
+resource "aws_iam_role" "github_iam_role_ecr_push_images" {
+  name               = "github-iam-role-ecr-push-images"
+  assume_role_policy = data.aws_iam_policy_document.trust["push"].json
+}
+
 
 data "aws_iam_policy_document" "trust" {
   for_each = local.roles
@@ -67,7 +74,7 @@ resource "aws_iam_role_policy_attachment" "readonly" {
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
 
-resource "aws_iam_role_policy_attachment" "vpcFullAccess" {
+resource "aws_iam_role_policy_attachment" "vpc_full_access" {
   role       = aws_iam_role.github_iam_role_apply.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonVPCFullAccess"
 }
@@ -89,13 +96,15 @@ data "aws_iam_policy_document" "ecr_create_repo_policy" {
       "ecr:DescribeRepositories",
       "ecr:TagResource",
       "ecr:GetRepositoryPolicy",
-      "ecr:GetRegistryPolicy",
+      "ecr:GetLifecyclePolicy",
+      "ecr:ListTagsForResource",
+      "ecr:UntagResource",
+      "ecr:PutImageTagMutability",
+      "ecr:PutImageScanningConfiguration",
       "ecr:PutLifecyclePolicy",
-      "ecr:PutRegistryPolicy",
       "ecr:SetRepositoryPolicy",
       "ecr:DeleteRepository",
       "ecr:DeleteLifecyclePolicy",
-      "ecr:DeleteRegistryPolicy",
       "ecr:DeleteRepositoryPolicy"
     ]
     resources = ["arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/*"]
@@ -138,6 +147,6 @@ resource "aws_iam_role_policy_attachment" "ecr_manage_policy_role_attach" {
 }
 
 resource "aws_iam_role_policy_attachment" "ecr_push_policy_role_attach" {
-  role       = aws_iam_role.github_iam_role_apply.name
+  role       = aws_iam_role.github_iam_role_ecr_push_images.name
   policy_arn = aws_iam_policy.ecr_push_policy.arn
 }
