@@ -8,6 +8,7 @@ on:
   push:
     paths:
       - 'module04/app/**'
+  workflow_dispatch:
 
 jobs:
   image-build-and-push:
@@ -31,6 +32,6 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
-          context: .
+          context: module04/app
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/website/demo:${{ github.sha }}
