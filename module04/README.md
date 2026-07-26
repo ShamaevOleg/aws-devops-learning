@@ -8,8 +8,11 @@ actual compute.
 
 - Creates a private ECR repository with immutable tags, scan-on-push, and a
   lifecycle policy that keeps the registry from growing without limit.
-- Extends the pipeline's IAM role with two separate ECR policies: one for
-  managing the repository, one for pushing images.
+- Splits ECR permissions across the pipeline's IAM roles: a manage policy for
+  the repository lifecycle, and a push policy on a dedicated third OIDC role
+  scoped to the `main` branch.
+- Builds and pushes an image to ECR from GitHub Actions via OIDC, with no
+  static credentials.
 - Provisions an EKS cluster with a dedicated VPC spanning two availability
   zones, a managed node group, and IAM-based access configured through Access
   Entries rather than the legacy `aws-auth` ConfigMap.
@@ -72,6 +75,22 @@ specific repository — the login token is issued for the whole registry, so its
 resource is `*`. Everything else is scoped to `repository/*` in this account
 and region, built from `aws_caller_identity` and `aws_region` rather than
 hardcoded.
+
+### A separate role for pushing images
+
+Pushing an image is not a change to infrastructure, so it should not go through
+the same approval gate as `apply`. Instead of widening the apply role's trust
+to cover the `main` branch — which would let any push to `main` assume a role
+that can change infrastructure, bypassing the gate — a third role handles image
+pushes. Its trust is scoped to `main` with no environment, and it carries only
+the push policy. Three roles now map cleanly to three concerns: read-only
+plans, gated infrastructure changes, and image pushes.
+
+Building the image also turned out to need read actions on the registry
+(`ecr:BatchGetImage`, `ecr:GetDownloadUrlForLayer`): buildkit issues a HEAD
+request against the tag's manifest before pushing, and without read access that
+returns 403. This is a different pull path from the one nodes use at runtime —
+both need read, for different reasons.
 
 ### Access Entries instead of `aws-auth`
 
@@ -180,7 +199,24 @@ principal signed in to the console.
 something in EKS is not visible, the first question is which of the two layers
 is refusing.
 
-### 5. Interrupting `apply` left an unmanaged resource
+### 5. Image push failed with 403 on the manifest
+
+**Symptom:** `docker push` (via `docker/build-push-action`) failed with
+`unexpected status from HEAD request ... 403 Forbidden` on the image manifest.
+The role had assumed correctly and the registry login had succeeded.
+
+**Cause:** The push policy contained only write actions. Before pushing,
+buildkit checks whether the tag already exists by issuing a HEAD request against
+the manifest — a read operation. Without `ecr:BatchGetImage` and
+`ecr:GetDownloadUrlForLayer`, that read returned 403.
+
+**Fix:** Added the two read actions to the push policy.
+
+**Takeaway:** "Push" is not purely a write operation. Buildkit reads the
+registry to decide what to upload, so a push role needs read access too — one
+of those permissions that only surfaces on a real push.
+
+### 6. Interrupting `apply` left an unmanaged resource
 
 **Symptom:** `terraform destroy -target=...` reported nothing to destroy, while
 the node group still existed in AWS.
@@ -196,10 +232,15 @@ Letting it fail on its own timeout leaves state consistent with reality.
 
 ## Known limitations / next steps
 
-- **No image has been pushed through the pipeline yet.** The registry, the
-  permissions and the node-side pull rights are in place, but the Dockerfile and
-  the workflow that build and push are still to be written. Until then, the ECR
-  pull path is untested end to end.
+- **The runtime pull path is not yet tested end to end.** An image is pushed to
+  ECR by the pipeline, and nodes carry `AmazonEC2ContainerRegistryReadOnly`, but
+  a pod pulling that specific image on a node has not been verified in one run —
+  the cluster and the push happened in separate sessions to avoid paying for
+  idle compute.
+- **The build produces an OCI image index, not a flat image.** `build-push-action`
+  wraps the result in an index with a provenance attestation by default, so the
+  repository shows three entries per push (index, image, metadata). Harmless, but
+  worth knowing when reading the console. `provenance: false` produces a flat image.
 - **Nodes run in public subnets.** Acceptable for a short-lived learning
   cluster, but production nodes belong in private subnets with a NAT gateway or
   VPC endpoints, so workers are not directly reachable from the internet.
