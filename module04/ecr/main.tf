@@ -1,14 +1,27 @@
-resource "aws_ecr_repository" "website_backend" {
-  name                 = "website/backend"
-  image_tag_mutability = "IMMUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
+locals {
+  repositories = {
+    backend = { name = "website/backend", scan_on_push = true, mutability = "IMMUTABLE" }
+    demo    = { name = "website/demo", scan_on_push = false, mutability = "MUTABLE" }
   }
 }
 
-resource "aws_ecr_lifecycle_policy" "website_backend_lc_policy" {
-  repository = aws_ecr_repository.website_backend.name
+resource "aws_ecr_repository" "website" {
+  for_each             = local.repositories
+  name                 = each.value.name
+  image_tag_mutability = each.value.mutability
+
+  image_scanning_configuration {
+    scan_on_push = each.value.scan_on_push
+  }
+
+  tags = {
+    Name = "repository:${each.value.name}"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "website_lc_policy" {
+  for_each   = aws_ecr_repository.website
+  repository = each.value.name
   policy = jsonencode({
     rules = [
       {

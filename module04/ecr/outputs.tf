@@ -1,4 +1,4 @@
-output "aws_ecr_repository_url" {
-  value       = aws_ecr_repository.website_backend.repository_url
-  description = "URL of the AWS ECR for website backend"
+output "aws_ecr_repository_urls" {
+  value       = { for k, repo in aws_ecr_repository.website : k => repo.repository_url }
+  description = "URLs of the ECR repositories, keyed by name"
 }
