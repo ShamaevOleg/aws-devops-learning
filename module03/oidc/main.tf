@@ -2,7 +2,7 @@ locals {
   roles = {
     readonly = { sub = "repo:ShamaevOleg/aws-devops-learning:*", test = "StringLike" }
     apply    = { sub = "repo:ShamaevOleg/aws-devops-learning:environment:production", test = "StringEquals" }
-    push = { sub = "repo:ShamaevOleg/aws-devops-learning:ref:refs/heads/main", test = "StringEquals" }
+    push     = { sub = "repo:ShamaevOleg/aws-devops-learning:ref:refs/heads/main", test = "StringEquals" }
   }
 }
 
@@ -119,7 +119,9 @@ data "aws_iam_policy_document" "ecr_push_policy" {
       "ecr:InitiateLayerUpload",
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
-      "ecr:BatchCheckLayerAvailability"
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
     ]
     resources = ["arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/*"]
   }

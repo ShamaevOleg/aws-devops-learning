@@ -9,7 +9,7 @@ on:
     branches:
       - main
     paths:
-      - 'module03/**.tf'
+      - 'module03/infra/**'
 
 concurrency:
   group: terraform_apply
