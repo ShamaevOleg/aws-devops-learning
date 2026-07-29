@@ -3,6 +3,7 @@ locals {
     readonly = { sub = "repo:ShamaevOleg/aws-devops-learning:*", test = "StringLike" }
     apply    = { sub = "repo:ShamaevOleg/aws-devops-learning:environment:production", test = "StringEquals" }
     push     = { sub = "repo:ShamaevOleg/aws-devops-learning:ref:refs/heads/main", test = "StringEquals" }
+    website  = { sub = "repo:ShamaevOleg/website:*", test = "StringLike" }
   }
 }
 
@@ -29,6 +30,10 @@ resource "aws_iam_role" "github_iam_role_ecr_push_images" {
   assume_role_policy = data.aws_iam_policy_document.trust["push"].json
 }
 
+resource "aws_iam_role" "github_iam_role_website_ecr_push_images" {
+  name               = "github-iam-role-website-ecr-push-images"
+  assume_role_policy = data.aws_iam_policy_document.trust["website"].json
+}
 
 data "aws_iam_policy_document" "trust" {
   for_each = local.roles
@@ -132,6 +137,29 @@ data "aws_iam_policy_document" "ecr_push_policy" {
   }
 }
 
+data "aws_iam_policy_document" "website_ecr_push_policy" {
+  statement {
+    sid    = "PushPull"
+    effect = "Allow"
+    actions = [
+      "ecr:PutImage",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
+    ]
+    resources = ["arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/website/*"]
+  }
+  statement {
+    sid       = "AuthToken"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+}
+
 resource "aws_iam_policy" "ecr_manage_policy" {
   name   = "ecr-manage-policy"
   policy = data.aws_iam_policy_document.ecr_create_repo_policy.json
@@ -142,6 +170,10 @@ resource "aws_iam_policy" "ecr_push_policy" {
   policy = data.aws_iam_policy_document.ecr_push_policy.json
 }
 
+resource "aws_iam_policy" "website_ecr_push_policy" {
+  name   = "website-ecr-push-policy"
+  policy = data.aws_iam_policy_document.website_ecr_push_policy.json
+}
 
 resource "aws_iam_role_policy_attachment" "ecr_manage_policy_role_attach" {
   role       = aws_iam_role.github_iam_role_apply.name
@@ -151,4 +183,9 @@ resource "aws_iam_role_policy_attachment" "ecr_manage_policy_role_attach" {
 resource "aws_iam_role_policy_attachment" "ecr_push_policy_role_attach" {
   role       = aws_iam_role.github_iam_role_ecr_push_images.name
   policy_arn = aws_iam_policy.ecr_push_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "website_ecr_push_policy_role_attach" {
+  role       = aws_iam_role.github_iam_role_website_ecr_push_images.name
+  policy_arn = aws_iam_policy.website_ecr_push_policy.arn
 }
