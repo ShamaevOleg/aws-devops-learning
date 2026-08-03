@@ -97,3 +97,39 @@ workflow was also capturing the output manually with a heredoc redirect into
 `steps.<id>.outputs.stdout`. The alternative would have been to disable the
 wrapper with `terraform_wrapper: false` and keep the manual capture — either
 approach works, but not both at once.
+
+
+## Addition: a fourth role for an external application repository (Module 06)
+
+The three roles above all serve pipelines in *this* repository. Module 06 adds a
+fourth, for a pipeline in a **different** repository — the private application
+repo that builds and pushes the application's container image.
+
+### Why a separate role is required
+
+An OIDC token's `sub` claim names the repository the workflow runs in. The three
+existing roles trust `repo:ShamaevOleg/aws-devops-learning:...`, so a token from
+another repository does not match their trust policies and is rejected. The
+external repository therefore needs its own role, whose trust policy names *it*.
+
+### `github-iam-role-website-ecr-push`
+
+- **Trust:** scoped to the application repository (`repo:ShamaevOleg/website`).
+- **Permissions:** a push-only ECR policy, scoped to that application's registry
+  namespace (`repository/website/*`) — plus `ecr:GetAuthorizationToken`, which
+  cannot be scoped to a repository and so applies to `*`.
+
+The namespace scope matters: this role can push the application's own images and
+nothing else. It cannot overwrite images belonging to this repository's pipelines
+(for example the demo image), read Terraform state, or change infrastructure. The
+trust boundary between the two repositories is enforced by IAM, not by
+convention.
+
+### Note on trust scoping during development
+
+While the application pipeline is being built, the role's trust is intentionally
+broad (`repo:ShamaevOleg/website:*`) so it can be assumed from a feature branch.
+Once the pipeline is stable and merged, this should be narrowed to
+`repo:ShamaevOleg/website:ref:refs/heads/main`, so only builds from the main
+branch can push — the same broad-then-narrow approach used for the read-only and
+apply roles.
