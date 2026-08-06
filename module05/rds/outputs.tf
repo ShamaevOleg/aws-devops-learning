@@ -4,6 +4,6 @@ output "aws_db_instance_name" {
 }
 
 output "aws_db_instance_secret_arn" {
-  value       = aws_db_instance.postgres.master_user_secret
+  value       = aws_db_instance.postgres.master_user_secret[0].secret_arn
   description = "ARN of secret with DB password"
 }

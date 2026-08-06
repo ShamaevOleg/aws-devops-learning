@@ -4,54 +4,22 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
-resource "aws_vpc" "vpc_for_eks" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_support   = true
-  enable_dns_hostnames = true
-
-  tags = {
-    Name = "AWS Virtual Private Cloud for EKS"
+data "terraform_remote_state" "network" {
+  backend = "s3"
+  config = {
+    bucket = "oleg-tfstate-initial"
+    key    = "network/terraform.tfstate"
+    region = "eu-west-2"
   }
 }
 
-resource "aws_subnet" "subnet" {
-  count                   = 2
-  vpc_id                  = aws_vpc.vpc_for_eks.id
-  cidr_block              = "10.0.${count.index + 1}.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = "true"
-
-  tags = {
-    Name                     = "subnet-${data.aws_availability_zones.available.names[count.index]}"
-    "kubernetes.io/role/elb" = "1"
+data "terraform_remote_state" "rds" {
+  backend = "s3"
+  config = {
+    bucket = "oleg-tfstate-initial"
+    key    = "module05/rds/terraform.tfstate"
+    region = "eu-west-2"
   }
-}
-
-resource "aws_internet_gateway" "gw_eks" {
-  vpc_id = aws_vpc.vpc_for_eks.id
-
-  tags = {
-    Name = "AWS IGW for EKS"
-  }
-}
-
-resource "aws_route_table" "route_eks" {
-  vpc_id = aws_vpc.vpc_for_eks.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.gw_eks.id
-  }
-
-  tags = {
-    Name = "AWS ROUTE TABLE FOR EKS"
-  }
-}
-
-resource "aws_route_table_association" "rt_association_eks" {
-  count          = 2
-  subnet_id      = aws_subnet.subnet[count.index].id
-  route_table_id = aws_route_table.route_eks.id
 }
 
 resource "aws_iam_role" "eks_cluster_role" {
@@ -111,7 +79,7 @@ resource "aws_eks_cluster" "eks_cluster_example" {
   vpc_config {
     endpoint_private_access = true
     endpoint_public_access  = true
-    subnet_ids              = aws_subnet.subnet[*].id
+    subnet_ids              = data.terraform_remote_state.network.outputs.public_subnet_ids
     public_access_cidrs     = [var.allowed_ip_for_kubectl]
   }
   depends_on = [aws_iam_role_policy_attachment.eks_cluster_role_attachment]
@@ -140,7 +108,7 @@ resource "aws_eks_node_group" "eks_example_node_group" {
   cluster_name    = aws_eks_cluster.eks_cluster_example.name
   node_group_name = "example_node_group"
   node_role_arn   = aws_iam_role.eks_node_role.arn
-  subnet_ids      = aws_subnet.subnet[*].id
+  subnet_ids      = data.terraform_remote_state.network.outputs.public_subnet_ids
   scaling_config {
     desired_size = 2
     max_size     = 2
@@ -150,4 +118,60 @@ resource "aws_eks_node_group" "eks_example_node_group" {
   capacity_type  = "ON_DEMAND"
   ami_type       = "AL2023_x86_64_STANDARD"
   depends_on     = [aws_iam_role_policy_attachment.eks_node_role_attachment]
+}
+
+data "tls_certificate" "eks_oidc" {
+  url = aws_eks_cluster.eks_cluster_example.identity[0].oidc[0].issuer
+}
+
+resource "aws_iam_openid_connect_provider" "eks" {
+  url             = aws_eks_cluster.eks_cluster_example.identity[0].oidc[0].issuer
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = [data.tls_certificate.eks_oidc.certificates[0].sha1_fingerprint]
+}
+
+data "aws_iam_policy_document" "eso_trust" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub"
+      values   = ["system:serviceaccount:external-secrets:external-secrets"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "eso_secrets" {
+  statement {
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["${data.terraform_remote_state.rds.outputs.aws_db_instance_secret_arn}*"]
+  }
+}
+
+resource "aws_iam_role" "eso" {
+  name               = "external-secrets-operator"
+  assume_role_policy = data.aws_iam_policy_document.eso_trust.json
+}
+
+resource "aws_iam_policy" "eso_secrets" {
+  name   = "eso-read-rds-secret"
+  policy = data.aws_iam_policy_document.eso_secrets.json
+}
+
+resource "aws_iam_role_policy_attachment" "eso" {
+  role       = aws_iam_role.eso.name
+  policy_arn = aws_iam_policy.eso_secrets.arn
 }

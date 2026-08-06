@@ -1,8 +1,8 @@
 locals {
   repositories = {
-    backend = { name = "website/backend", scan_on_push = true, mutability = "IMMUTABLE" }
+    backend  = { name = "website/backend", scan_on_push = true, mutability = "IMMUTABLE" }
     frontend = { name = "website/frontend", scan_on_push = true, mutability = "IMMUTABLE" }
-    demo    = { name = "website/demo", scan_on_push = false, mutability = "MUTABLE" }
+    demo     = { name = "website/demo", scan_on_push = false, mutability = "MUTABLE" }
   }
 }
 
